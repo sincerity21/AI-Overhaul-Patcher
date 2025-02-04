@@ -6,7 +6,6 @@ The changes include:
 - WIP
 
 
-------------------------------------------------------------------------------------------------------------------------
 # THE ORIGINAL DESCRIPTION:
 # AI-Overhaul-Patcher
 A Synthethis patcher for AI Overhaul SE https://www.nexusmods.com/skyrimspecialedition/mods/21654
