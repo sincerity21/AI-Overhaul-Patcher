@@ -1,10 +1,13 @@
 # Fork of Excinirus's AI-Overhaul-Patcher
-A fork of said patcher with certain personal tweaks and fixes, with the intention of being used alongside my AI Overhaul SSE SkyPatcher Patch: https://www.nexusmods.com/skyrimspecialedition/mods/138722
-The changes includes:
-- 
+A fork of said patcher with personal tweaks and fixes with the intention of it being used alongside my AI Overhaul SSE SkyPatcher Patch: https://www.nexusmods.com/skyrimspecialedition/mods/138722
+The changes include:
+- WIP
+- WIP
+- WIP
 
 
-# ORIGINAL DESCRIPTION:
+# THE ORIGINAL DESCRIPTION:
+
 ------------------------------------------------------------------------------------------------------------------------
 
 # AI-Overhaul-Patcher
