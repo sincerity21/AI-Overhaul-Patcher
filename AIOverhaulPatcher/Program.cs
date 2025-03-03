@@ -194,12 +194,10 @@ namespace AIOverhaulPatcher
                 } 
 
 
-                if (npc.AIData.Confidence != patchNpc.AIData.Confidence)
+                if (npc.CombatStyle != patchNpc.CombatStyle)
                 {
-                    patchNpc.AIData.Confidence = (Confidence)Math.Min((int)patchNpc.AIData.Confidence, (int)npc.AIData.Confidence);
+                    patchNpc.CombatStyle.SetTo(npc.CombatStyle);
                     change = true;
-
-
                 }
 
 
@@ -220,6 +218,13 @@ namespace AIOverhaulPatcher
                     }
 
                 }
+				
+				
+				if (!npc.ObjectBounds.Equals(patchNpc.ObjectBounds))
+				{
+					patchNpc.ObjectBounds = npc.ObjectBounds.DeepCopy();
+					change = true;
+				}
 
 
                 if (_settings.Value.IgnoreIdenticalToLastOverride && !change)
