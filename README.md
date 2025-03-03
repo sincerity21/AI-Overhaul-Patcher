@@ -1,9 +1,9 @@
 # Personal fork of Excinerus's AI-Overhaul-Patcher
 A fork of said patcher with personal tweaks and fixes with the intention of it being used alongside my AI Overhaul SSE SkyPatcher Patch: https://www.nexusmods.com/skyrimspecialedition/mods/138722
 The changes include:
-- WIP
-- WIP
-- WIP
+- Any AI-Data forwarding are removed; those are handled directly by SkyPatcher now
+- Will now forward Object Bounds of NPCs from AI Overhaul.esp
+- Will now forward Combat Style of NPCs from AI Overhaul.esp
 
 
 
