@@ -1,5 +1,6 @@
 # Personal fork of Excinerus's AI-Overhaul-Patcher
 A fork of said patcher with personal tweaks and fixes with the intention of it being used alongside my AI Overhaul SSE SkyPatcher Patch: https://www.nexusmods.com/skyrimspecialedition/mods/138722
+You can download the .synth file from the modpage linked above.
 
 The changes include:
 - Any AI-Data forwarding are removed; those are handled directly by SkyPatcher now
