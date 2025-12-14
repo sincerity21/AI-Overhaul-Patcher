@@ -1,12 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-		<TargetFramework>net6.0</TargetFramework>
-    <TargetPlatformIdentifier>Windows</TargetPlatformIdentifier>
+		<TargetFramework>net8.0</TargetFramework>
+		<TargetPlatformIdentifier>Windows</TargetPlatformIdentifier>
+		<!-- Suppress analyzer warning about analyzer referencing a newer compiler runtime -->
+		<NoWarn>9057</NoWarn>
 	</PropertyGroup>
 	<ItemGroup>
-    <PackageReference Include="Mutagen.Bethesda" Version="0.45.1" />
-    <PackageReference Include="Mutagen.Bethesda.Synthesis" Version="0.29" />
-    <PackageReference Include="Mutagen.Bethesda.FormKeys.SkyrimSE" Version="3.0.0" />
+	<PackageReference Include="Mutagen.Bethesda" Version="0.52.0" />
+	<PackageReference Include="Mutagen.Bethesda.Synthesis" Version="0.35.3" />
+	<PackageReference Include="Mutagen.Bethesda.FormKeys.SkyrimSE" Version="3.4.0" />
 	</ItemGroup>
 </Project>
