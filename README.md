@@ -4,7 +4,7 @@ A fork of said patcher with personal tweaks and fixes with the intention of it b
 You can download the .synth file from the modpage linked above.
 
 The changes include:
-- Any AI-Data forwarding are removed; those are handled directly by SkyPatcher now
+- Will now forward 3 AI Datas covered by AI Overhaul.esp; Confidence, Aggression, Assistance
 - Will now forward Object Bounds of NPCs from AI Overhaul.esp
 - Will now forward Combat Style of NPCs from AI Overhaul.esp
 
