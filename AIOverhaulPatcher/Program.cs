@@ -244,6 +244,24 @@ namespace AIOverhaulPatcher
                     change = true;
                 }
 
+                if (patchNpc.Configuration.Aggression != npc.Configuration.Aggression)
+                {
+                    patchNpc.Configuration.Aggression = npc.Configuration.Aggression;
+                    change = true;
+                }
+
+                if (patchNpc.Configuration.Confidence != npc.Configuration.Confidence)
+                {
+                    patchNpc.Configuration.Confidence = npc.Configuration.Confidence;
+                    change = true;
+                }
+
+                if (patchNpc.Configuration.Assistance != npc.Configuration.Assistance)
+                {
+                    patchNpc.Configuration.Assistance = npc.Configuration.Assistance;
+                    change = true;
+                }
+
 
                 if (npc.VirtualMachineAdapter != null)
                 {
