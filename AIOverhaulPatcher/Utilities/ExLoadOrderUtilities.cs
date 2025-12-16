@@ -23,7 +23,7 @@ namespace AIOverhaulPatcher.Utilities
             return LoadOrder.Keys.ToList().FindIndex(0, LoadOrder.Keys.Count(), x => ((string)x.FileName).ToLower() == Filename.ToLower());
         }
  
-        public static int GetOrder<TMajor>(this TMajor record, SynthesisState<ISkyrimMod, ISkyrimModGetter> state) where TMajor : class, IMajorRecordGetter
+        public static int GetOrder<TMajor>(this TMajor record, IPatcherState<ISkyrimMod, ISkyrimModGetter> state) where TMajor : class, IMajorRecordGetter
         {
             if (record == null || state == null) return -1;
 

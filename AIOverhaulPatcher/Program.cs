@@ -7,6 +7,7 @@ using Mutagen.Bethesda.Skyrim;
 using AIOverhaulPatcher.Utilities;
 using AIOverhaulPatcher.Settings;
 using Noggog;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Mutagen.Bethesda.Plugins; 
 
@@ -18,7 +19,48 @@ namespace AIOverhaulPatcher
         const string AioPatchName = "AIOPatch.esp";
         public static Task<int> Main(string[] args)
         {
-            
+            // Diagnostic: log raw args received so we can see how Synthesis forwards them.
+            Console.WriteLine($"Raw args length: {args.Length}");
+            for (int _i = 0; _i < args.Length; _i++)
+                Console.WriteLine($"arg[{_i}]: '{args[_i]}'");
+
+            // If Synthesis (or other caller) passes the entire app argument string as a single
+            // quoted argument, split it into proper args here so the pipeline receives them.
+            if (args.Length == 1)
+            {
+                var single = args[0];
+                if (single.Contains("--DataFolderPath") || single.Contains("run-patcher") || single.Contains("--PatcherName"))
+                {
+                    args = SplitArgs(single);
+                }
+            }
+
+            // If we still don't have useful args (Synthesis may invoke `dotnet run` so the
+            // host command-line contains the app args but they don't appear in `args`),
+            // try to extract them from Environment.CommandLine.
+            if (args.Length == 0 || (args.Length == 1 && !args[0].Contains("--DataFolderPath") && !args[0].Contains("run-patcher")))
+            {
+                try
+                {
+                    var cmdLine = Environment.CommandLine ?? string.Empty;
+                    // Look for the token 'run-patcher' and take everything after it as app args
+                    var m = Regex.Match(cmdLine, "(?:\\s|\\\")run-patcher(?:\\s+)(.*)$", RegexOptions.Singleline);
+                    if (m.Success)
+                    {
+                        var tail = m.Groups[1].Value.Trim();
+                        if (!string.IsNullOrEmpty(tail))
+                        {
+                            Console.WriteLine("Parsed args from Environment.CommandLine.");
+                            args = SplitArgs(tail);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Failed to parse Environment.CommandLine: " + ex.Message);
+                }
+            }
+
             return SynthesisPipeline.Instance
                 .AddPatch<ISkyrimMod, ISkyrimModGetter>(RunPatch, new PatcherPreferences()
                 {
@@ -54,6 +96,8 @@ namespace AIOverhaulPatcher
             int b = 0;
             int processed = 0;
             int total = AIOverhaul.Npcs.Count;
+            var updatedNpcs = new System.Collections.Generic.List<string>();
+            int updatedCount = 0;
 
             var AIOFormIDs = AIOverhaul.Npcs.Select(x => x.FormKey).ToList();
             var winningOverrides = state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>().Where(x => AIOFormIDs.Contains(x.FormKey)).ToList();
@@ -231,13 +275,61 @@ namespace AIOverhaulPatcher
                 {
                     state.PatchMod.Npcs.Remove(npc);
                 }
+                else if (change)
+                {
+                    updatedCount++;
+                    string displayName = npc.FormKey.ToString();
+                    try
+                    {
+                        if (npc.Name != null)
+                            displayName = npc.Name.ToString() ?? displayName;
+                        else if (winningOverride != null && winningOverride.Name != null)
+                            displayName = winningOverride.Name.ToString() ?? displayName;
+                    }
+                    catch
+                    {
+                        displayName = npc.FormKey.ToString();
+                    }
+                    string masterSource = "unknown";
+                    try
+                    {
+                        if (winningMaster != null)
+                            masterSource = winningMaster.FormKey.ModKey.FileName;
+                    }
+                    catch { }
+                    var entry = $"{displayName} ({npc.FormKey}) - source: {masterSource}";
+                    updatedNpcs.Add(entry);
+                    System.Console.WriteLine("Updated: " + entry);
+                }
                 b++;
                 processed++;
+            }
+            // summary
+            System.Console.WriteLine($"Updated {updatedCount} of {total} NPCs.");
+            if (updatedCount > 0)
+            {
+                System.Console.WriteLine("Updated NPCs:");
+                foreach (var e in updatedNpcs)
+                    System.Console.WriteLine("  " + e);
             }
             if (state.PatchMod.ModKey.Name == AioPatchName)
             {
                 state.PatchMod.ModHeader.Flags = state.PatchMod.ModHeader.Flags | SkyrimModHeader.HeaderFlag.Small;
             }
+        }
+
+        private static string[] SplitArgs(string commandLine)
+        {
+            var matches = Regex.Matches(commandLine, "[\"]([^\"]*)[\"]|'([^']*)'|[^ \t\r\n]+");
+            var parts = new List<string>();
+            foreach (Match m in matches)
+            {
+                var v = m.Value;
+                if (v.Length >= 2 && ((v[0] == '"' && v[v.Length - 1] == '"') || (v[0] == '\'' && v[v.Length - 1] == '\'')))
+                    v = v.Substring(1, v.Length - 2);
+                parts.Add(v);
+            }
+            return parts.ToArray();
         }
     }
 }

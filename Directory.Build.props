@@ -1,0 +1,10 @@
+<Project>
+  <ItemGroup>
+    <!-- Prevent Noggog source generator analyzer from running to avoid AssemblyVersions duplicate type -->
+    <Analyzer Remove="**\Noggog.SourceGenerators*.dll" />
+    <Analyzer Remove="**/Noggog.SourceGenerators*.dll" />
+    <Analyzer Remove="**/*Noggog.SourceGenerators*.dll" />
+    <!-- Try removing analyzer directly from the global NuGet package folder (if present) -->
+    <Analyzer Remove="$(NuGetPackageRoot)noggog.sourcegenerators\3.1.0\analyzers\dotnet\cs\Noggog.SourceGenerators.dll" />
+  </ItemGroup>
+</Project>

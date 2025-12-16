@@ -6,5 +6,6 @@
   "PreferredAutoVersioning": "Default",
   "RequiredMods": [
     "AI Overhaul.esp"
-  ]
+  ],
+  "TargetedReleases": []
 }
