@@ -244,21 +244,21 @@ namespace AIOverhaulPatcher
                     change = true;
                 }
 
-                if (patchNpc.Configuration.Aggression != npc.Configuration.Aggression)
+                if (patchNpc.AIData.Aggression != npc.AIData.Aggression)
                 {
-                    patchNpc.Configuration.Aggression = npc.Configuration.Aggression;
+                    patchNpc.AIData.Aggression = npc.AIData.Aggression;
                     change = true;
                 }
 
-                if (patchNpc.Configuration.Confidence != npc.Configuration.Confidence)
+                if (patchNpc.AIData.Confidence != npc.AIData.Confidence)
                 {
-                    patchNpc.Configuration.Confidence = npc.Configuration.Confidence;
+                    patchNpc.AIData.Confidence = npc.AIData.Confidence;
                     change = true;
                 }
 
-                if (patchNpc.Configuration.Assistance != npc.Configuration.Assistance)
+                if (patchNpc.AIData.Assistance != npc.AIData.Assistance)
                 {
-                    patchNpc.Configuration.Assistance = npc.Configuration.Assistance;
+                    patchNpc.AIData.Assistance = npc.AIData.Assistance;
                     change = true;
                 }
 
