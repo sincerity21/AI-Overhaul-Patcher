@@ -2,3 +2,6 @@ AIOverhaulPatcher/obj/
 AIOverhaulPatcher/bin/
 .vs/
 .idea/
+.vscode/launch.json
+.vscode/tasks.json
+%APPDATA%/*
