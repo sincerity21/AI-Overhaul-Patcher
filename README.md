@@ -7,6 +7,22 @@ The changes include:
 - Will now forward 3 AI Datas covered by AI Overhaul.esp; Confidence, Aggression, Assistance
 - Will now forward Object Bounds of NPCs from AI Overhaul.esp
 - Will now forward Combat Style of NPCs from AI Overhaul.esp
+- Updated to support AI Overhaul SSE's latest version (1.9.5), the split plugins update (USSEP Patch, Fishing Addon)
+- Quest reference-alias ALPC patching (`QuestAlpcPatch`): `Mg01Only` restores MG01 alias 11 packages (Faralda / College conflict); `All` forwards every AIO quest ALPC delta vs master using the same package merge rules as NPCs
+
+(New) Settings:
+
+
+- QuestAlpcPatch
+
+		Default = Off
+
+		`Off` — no quest ALPC patching. 
+		`Mg01Only` — patch MG01 alias 11 only (College Of Winterhold conflict). 
+		`All` — patch every quest reference alias where AIO changed ALPC vs master.
+
+
+Vibe-coded using Cursor.
 
 
 

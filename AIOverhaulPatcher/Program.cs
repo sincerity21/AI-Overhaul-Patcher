@@ -6,6 +6,7 @@ using Mutagen.Bethesda.Synthesis;
 using Mutagen.Bethesda.Skyrim;
 using AIOverhaulPatcher.Utilities;
 using AIOverhaulPatcher.Settings;
+using AIOverhaulPatcher.Patching;
 using Noggog;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -19,6 +20,12 @@ namespace AIOverhaulPatcher
         const string AioPatchName = "AIOPatch.esp";
         public static Task<int> Main(string[] args)
         {
+            if (args.Length > 0 && string.Equals(args[0], "verify-npcs", StringComparison.OrdinalIgnoreCase))
+                return Task.FromResult(Verify.NpcMergeVerifier.Run());
+
+            if (args.Length > 0 && string.Equals(args[0], "verify-quest-alpc", StringComparison.OrdinalIgnoreCase))
+                return Task.FromResult(Verify.QuestAlpcMergeVerifier.Run());
+
             // Diagnostic: log raw args received so we can see how Synthesis forwards them.
             Console.WriteLine($"Raw args length: {args.Length}");
             for (int _i = 0; _i < args.Length; _i++)
@@ -91,28 +98,32 @@ namespace AIOverhaulPatcher
                 return;
             }
 
+            var aioMods = AioPluginUtilities.GetLoadedAioMods(state);
+            var aioModKeys = AioPluginUtilities.GetAioModKeys(aioMods);
+            var aioFormKeys = AioPluginUtilities.GetAllAioNpcFormKeys(aioMods);
 
             int bmax = 10;
             int b = 0;
             int processed = 0;
-            int total = AIOverhaul.Npcs.Count;
+            int total = aioFormKeys.Count;
             var updatedNpcs = new System.Collections.Generic.List<string>();
             int updatedCount = 0;
 
-            var AIOFormIDs = AIOverhaul.Npcs.Select(x => x.FormKey).ToList();
-            var winningOverrides = state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>().Where(x => AIOFormIDs.Contains(x.FormKey)).ToList();
-            //var USLEEPandPrior = state.LoadOrder.PriorityOrder.Reverse().Take(UsleepOrder + 1).Select(x => x.Mod).ToList();
+            var winningOverrides = state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>().Where(x => aioFormKeys.Contains(x.FormKey)).ToList();
             var masterfilenames = AIOverhaul.MasterReferences.Select(x => x.Master.FileName).ToList();
             var MasterFiles = state.LoadOrder.PriorityOrder.Reverse().Where(x => masterfilenames.Contains(x.ModKey.FileName)).ToList();
-            var NPCMasters = MasterFiles.Select(x => x.Mod).NotNull().SelectMany(x => x.Npcs).Where(x => AIOFormIDs.Contains(x.FormKey)).ToList();
+            var NPCMasters = MasterFiles.Select(x => x.Mod).NotNull().SelectMany(x => x.Npcs).Where(x => aioFormKeys.Contains(x.FormKey)).ToList();
 
-            var allOverrides = state.LoadOrder.PriorityOrder.Reverse().Skip(UsleepOrder + 1).Select(x => x.Mod).NotNull().SelectMany(x => x.Npcs).Where(x => AIOFormIDs.Contains(x.FormKey)).ToList();
+            var allOverrides = state.LoadOrder.PriorityOrder.Reverse().Skip(UsleepOrder + 1).Select(x => x.Mod).NotNull().SelectMany(x => x.Npcs).Where(x => aioFormKeys.Contains(x.FormKey)).ToList();
 
 
             System.Console.WriteLine(processed + "/" + total + " Npcs");
-            foreach (var npc in AIOverhaul.Npcs)
+            foreach (var formKey in aioFormKeys)
             {
-                if (_settings.Value.IgnorePlayerRecord &&  new List<uint>() { 7, 14 }.Contains(npc.FormKey.ID)) continue;
+                var aioNpc = AioPluginUtilities.GetWinningAioNpc(formKey, state, aioModKeys);
+                if (aioNpc == null) continue;
+
+                if (_settings.Value.IgnorePlayerRecord &&  new List<uint>() { 7, 14 }.Contains(aioNpc.FormKey.ID)) continue;
 
                 if (b >= bmax)
                 {
@@ -120,25 +131,50 @@ namespace AIOverhaulPatcher
                     System.Console.WriteLine(processed + "/" + total + " Npcs");
                 }
 
-                var winningOverride = winningOverrides.Where(x => x.FormKey == npc.FormKey).First();
-                var Masters = NPCMasters.Where(x => x.FormKey == npc.FormKey).ToList();
+                var winningOverride = winningOverrides.Where(x => x.FormKey == aioNpc.FormKey).First();
+                var Masters = NPCMasters.Where(x => x.FormKey == aioNpc.FormKey).ToList();
                 var winningMaster = Masters.FirstOrDefault();
-                if (winningMaster == null) winningMaster = state.LoadOrder.PriorityOrder.Select(x => x.Mod).NotNull().SelectMany(x => x.Npcs).Where(x => x.FormKey == npc.FormKey).First();
-                var overrides = allOverrides.Where(x => x.FormKey == npc.FormKey).ToList();
-
-
+                if (winningMaster == null) winningMaster = state.LoadOrder.PriorityOrder.Select(x => x.Mod).NotNull().SelectMany(x => x.Npcs).Where(x => x.FormKey == aioNpc.FormKey).First();
+                var overrides = allOverrides.Where(x => x.FormKey == aioNpc.FormKey).ToList();
 
                 bool change = false;
 
                 var patchNpc = state.PatchMod.Npcs.GetOrAddAsOverride(winningOverride);
-                if (npc.IsProtected() && !(patchNpc.IsProtected() || (patchNpc.IsEssential() && _settings.Value.MaintainHighestProtectionLevel)))
+                if (aioNpc.IsProtected() && !(patchNpc.IsProtected() || (patchNpc.IsEssential() && _settings.Value.MaintainHighestProtectionLevel)))
                 {
                     patchNpc.Configuration.Flags = patchNpc.Configuration.Flags.SetFlag(NpcConfiguration.Flag.Protected, true);
                     change = true;
 
 
                 }
-                foreach (var fac in npc.Factions)
+
+                var flagsChangedByAio = aioNpc.Configuration.Flags ^ winningMaster.Configuration.Flags;
+                if (flagsChangedByAio != 0)
+                {
+                    var beforeFlags = patchNpc.Configuration.Flags;
+                    AioPluginUtilities.ForwardAioChangedFlagBits(
+                        winningMaster.Configuration.Flags,
+                        aioNpc.Configuration.Flags,
+                        patchNpc.Configuration.Flags,
+                        merged => patchNpc.Configuration.Flags = merged);
+                    if (patchNpc.Configuration.Flags != beforeFlags)
+                        change = true;
+                }
+
+                var templateFlagsChangedByAio = aioNpc.Configuration.TemplateFlags ^ winningMaster.Configuration.TemplateFlags;
+                if (templateFlagsChangedByAio != 0)
+                {
+                    var beforeTemplateFlags = patchNpc.Configuration.TemplateFlags;
+                    AioPluginUtilities.ForwardAioChangedTemplateFlagBits(
+                        winningMaster.Configuration.TemplateFlags,
+                        aioNpc.Configuration.TemplateFlags,
+                        patchNpc.Configuration.TemplateFlags,
+                        merged => patchNpc.Configuration.TemplateFlags = merged);
+                    if (patchNpc.Configuration.TemplateFlags != beforeTemplateFlags)
+                        change = true;
+                }
+
+                foreach (var fac in aioNpc.Factions)
                     if (!patchNpc.Factions.Select(x => new KeyValuePair<FormKey, int>(x.Faction.FormKey, x.Rank)).Contains(new KeyValuePair<FormKey, int>(fac.Faction.FormKey, fac.Rank)))
                     {
                         patchNpc.Factions.Add(fac.DeepCopy());
@@ -146,34 +182,25 @@ namespace AIOverhaulPatcher
 
                     }
 
-                if (!patchNpc.Packages.All(x => npc.Packages.Contains(x)) || !npc.Packages.All(x => patchNpc.Packages.Contains(x)))
+                var aioPackages = AioPluginUtilities.BuildEffectiveAioPackageOrder(formKey, state, aioModKeys);
+                var mergedPackages = AioPluginUtilities.BuildMergedPackageList(
+                    aioPackages.EffectiveAioOrder,
+                    winningOverride, Masters, overrides);
+                var packagesReordered = !AioPluginUtilities.PackageListsEqual(patchNpc.Packages, mergedPackages);
+                if (packagesReordered)
                 {
                     change = true;
-
-
-                    var PackagesToRemove = Masters.SelectMany(x => x.Packages).Select(x => x.FormKey).Where(x => !npc.Packages.Select(x => x.FormKey).Contains(x)).ToHashSet<FormKey>();
-
-                    var PackagesToAdd = overrides.SelectMany(x => x.Packages).Select(x => x.FormKey).Where(x => !PackagesToRemove.Contains(x)).Distinct().ToList();
-
-                    if (PackagesToAdd.Count > 0 || PackagesToRemove.Count > 0)
-                    {
-                        var aioOrder = npc.Packages.Select(x => x.FormKey).ToList();
-                        patchNpc.Packages.Clear();
-                        PackagesToAdd.OrderBy(x => npc.Packages.Contains(x) ? aioOrder.IndexOf(x)  : (npc.Packages.Count + PackagesToAdd.IndexOf(x))).ForEach(x => patchNpc.Packages.Add(x));
-                        
-                    } 
+                    patchNpc.Packages.Clear();
+                    mergedPackages.ForEach(x => patchNpc.Packages.Add(x));
                 }
-
-
-
 
                 var OverwrittenOutfits = Masters.Select(x => x.DefaultOutfit).Select(x => x.FormKey).Distinct().ToHashSet<FormKey>();
                 var OverwrittenSleepingOutfit = Masters.Select(x => x.SleepingOutfit).Select(x => x.FormKey).Distinct().ToHashSet<FormKey>();
 
-                FormKey? OverwrittingOutfit = overrides.Select(x => x.DefaultOutfit).Select(x => x.FormKey).Where(x => !x.IsNull && !OverwrittenOutfits.Contains(x)).Prepend(npc.DefaultOutfit.FormKey).LastOrDefault();
-                FormKey? OverwrittingSleepingOutfit = overrides.Select(x => x.SleepingOutfit).Select(x => x.FormKey).Where(x => !x.IsNull && !OverwrittenSleepingOutfit.Contains(x)).Prepend(npc.SleepingOutfit.FormKey).LastOrDefault();
+                FormKey? OverwrittingOutfit = overrides.Select(x => x.DefaultOutfit).Select(x => x.FormKey).Where(x => !x.IsNull && !OverwrittenOutfits.Contains(x)).Prepend(aioNpc.DefaultOutfit.FormKey).LastOrDefault();
+                FormKey? OverwrittingSleepingOutfit = overrides.Select(x => x.SleepingOutfit).Select(x => x.FormKey).Where(x => !x.IsNull && !OverwrittenSleepingOutfit.Contains(x)).Prepend(aioNpc.SleepingOutfit.FormKey).LastOrDefault();
 
-                if (npc.DefaultOutfit.FormKey != patchNpc.DefaultOutfit.FormKey)
+                if (aioNpc.DefaultOutfit.FormKey != patchNpc.DefaultOutfit.FormKey)
                 {
                     if (OverwrittingOutfit.HasValue && !OverwrittingOutfit.Value.IsNull)
                         patchNpc.DefaultOutfit.SetTo(OverwrittingOutfit);
@@ -184,7 +211,7 @@ namespace AIOverhaulPatcher
 
                 }
 
-                if (npc.SleepingOutfit.FormKey != patchNpc.SleepingOutfit.FormKey)
+                if (aioNpc.SleepingOutfit.FormKey != patchNpc.SleepingOutfit.FormKey)
                 {
                     if (OverwrittingSleepingOutfit.HasValue && !OverwrittingSleepingOutfit.Value.IsNull)
                         patchNpc.SleepingOutfit.SetTo(OverwrittingSleepingOutfit);
@@ -194,20 +221,20 @@ namespace AIOverhaulPatcher
 
 
                 }
-                if (npc.SpectatorOverridePackageList.FormKey != patchNpc.SpectatorOverridePackageList.FormKey)
+                if (aioNpc.SpectatorOverridePackageList.FormKey != patchNpc.SpectatorOverridePackageList.FormKey)
                 {
-                    if (!npc.SpectatorOverridePackageList.IsNull)
-                        patchNpc.SpectatorOverridePackageList.SetTo(npc.SpectatorOverridePackageList);
+                    if (!aioNpc.SpectatorOverridePackageList.IsNull)
+                        patchNpc.SpectatorOverridePackageList.SetTo(aioNpc.SpectatorOverridePackageList);
                     else
                         patchNpc.SpectatorOverridePackageList.SetToNull();
                     change = true;
 
                 }
 
-                if (npc.CombatOverridePackageList.FormKey != patchNpc.CombatOverridePackageList.FormKey)
+                if (aioNpc.CombatOverridePackageList.FormKey != patchNpc.CombatOverridePackageList.FormKey)
                 {
-                    if (!npc.CombatOverridePackageList.IsNull)
-                        patchNpc.CombatOverridePackageList.SetTo(npc.CombatOverridePackageList);
+                    if (!aioNpc.CombatOverridePackageList.IsNull)
+                        patchNpc.CombatOverridePackageList.SetTo(aioNpc.CombatOverridePackageList);
                     else
                         patchNpc.CombatOverridePackageList.SetToNull();
                     change = true;
@@ -215,19 +242,19 @@ namespace AIOverhaulPatcher
 
                 }
 
-                if (npc.ObserveDeadBodyOverridePackageList != patchNpc.ObserveDeadBodyOverridePackageList)
+                if (aioNpc.ObserveDeadBodyOverridePackageList != patchNpc.ObserveDeadBodyOverridePackageList)
                 {
-                    patchNpc.ObserveDeadBodyOverridePackageList.SetTo(npc.ObserveDeadBodyOverridePackageList);
+                    patchNpc.ObserveDeadBodyOverridePackageList.SetTo(aioNpc.ObserveDeadBodyOverridePackageList);
                     change = true;
                 }
 
-                if (npc.Items != null && _settings.Value.MergeItems)
+                if (aioNpc.Items != null && _settings.Value.MergeItems)
                 {
                     if (patchNpc.Items == null )
                     {
                         patchNpc.Items  = new ExtendedList<ContainerEntry>();
                     }
-                    foreach (var item in npc.Items)
+                    foreach (var item in aioNpc.Items)
                     {
                         if (!patchNpc.Items.Contains(item))
                         {
@@ -238,75 +265,109 @@ namespace AIOverhaulPatcher
                 } 
 
 
-                if (npc.CombatStyle != patchNpc.CombatStyle)
+                if (AioPluginUtilities.ShouldForwardAioFormLink(winningMaster.CombatStyle, aioNpc.CombatStyle, winningOverride.CombatStyle))
                 {
-                    patchNpc.CombatStyle.SetTo(npc.CombatStyle);
+                    patchNpc.CombatStyle.SetTo(aioNpc.CombatStyle);
                     change = true;
                 }
 
-                if (patchNpc.AIData.Aggression != npc.AIData.Aggression)
+                if (AioPluginUtilities.ShouldForwardAioChange(winningMaster.AIData.Aggression, aioNpc.AIData.Aggression, winningOverride.AIData.Aggression))
                 {
-                    patchNpc.AIData.Aggression = npc.AIData.Aggression;
+                    patchNpc.AIData.Aggression = aioNpc.AIData.Aggression;
                     change = true;
                 }
 
-                if (patchNpc.AIData.Confidence != npc.AIData.Confidence)
+                if (AioPluginUtilities.ShouldForwardAioChange(winningMaster.AIData.Confidence, aioNpc.AIData.Confidence, winningOverride.AIData.Confidence))
                 {
-                    patchNpc.AIData.Confidence = npc.AIData.Confidence;
+                    patchNpc.AIData.Confidence = aioNpc.AIData.Confidence;
                     change = true;
                 }
 
-                if (patchNpc.AIData.Assistance != npc.AIData.Assistance)
+                if (AioPluginUtilities.ShouldForwardAioChange(winningMaster.AIData.Assistance, aioNpc.AIData.Assistance, winningOverride.AIData.Assistance))
                 {
-                    patchNpc.AIData.Assistance = npc.AIData.Assistance;
+                    patchNpc.AIData.Assistance = aioNpc.AIData.Assistance;
                     change = true;
                 }
 
-
-                if (npc.VirtualMachineAdapter != null)
+                if (AioPluginUtilities.ShouldForwardAioFormLink(winningMaster.Class, aioNpc.Class, winningOverride.Class))
                 {
-                    List<IScriptEntryGetter> ScriptsToForward = npc.VirtualMachineAdapter.Scripts.Where(x => patchNpc.VirtualMachineAdapter == null || !patchNpc.VirtualMachineAdapter.Scripts.Select(x => x.Name).Contains(x.Name)).ToList();
-                    if (ScriptsToForward.Count > 0)
+                    patchNpc.Class.SetTo(aioNpc.Class);
+                    change = true;
+                }
+
+                if (AioPluginUtilities.ShouldForwardAioPlayerSkills(
+                    winningMaster.PlayerSkills,
+                    aioNpc.PlayerSkills,
+                    winningOverride.PlayerSkills))
+                {
+                    patchNpc.PlayerSkills = aioNpc.PlayerSkills!.DeepCopy();
+                    change = true;
+                }
+
+                var masterScriptNames = winningMaster.VirtualMachineAdapter?.Scripts
+                    .Select(x => x.Name)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                    ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var aioScriptNames = aioNpc.VirtualMachineAdapter?.Scripts
+                    .Select(x => x.Name)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                    ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var scriptName in masterScriptNames.Where(n => !aioScriptNames.Contains(n)))
+                {
+                    if (patchNpc.VirtualMachineAdapter?.Scripts == null) continue;
+                    var removed = patchNpc.VirtualMachineAdapter.Scripts
+                        .Where(s => string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    foreach (var script in removed)
                     {
+                        patchNpc.VirtualMachineAdapter.Scripts.Remove(script);
                         change = true;
-
-
-                        if (patchNpc.VirtualMachineAdapter == null)
-                            patchNpc.VirtualMachineAdapter = npc.VirtualMachineAdapter.DeepCopy();
-                        else
-                        {
-                            ScriptsToForward.ForEach(x => patchNpc.VirtualMachineAdapter.Scripts.Add(x.DeepCopy()));
-                        }
                     }
-
                 }
-				
-				
-				if (!npc.ObjectBounds.Equals(patchNpc.ObjectBounds))
-				{
-					patchNpc.ObjectBounds = npc.ObjectBounds.DeepCopy();
-					change = true;
-				}
+
+                if (aioNpc.VirtualMachineAdapter != null)
+                {
+                    foreach (var script in aioNpc.VirtualMachineAdapter.Scripts.Where(s => !masterScriptNames.Contains(s.Name)))
+                    {
+                        if (patchNpc.VirtualMachineAdapter == null)
+                            patchNpc.VirtualMachineAdapter = new VirtualMachineAdapter();
+                        if (patchNpc.VirtualMachineAdapter.Scripts.Any(s => string.Equals(s.Name, script.Name, StringComparison.OrdinalIgnoreCase)))
+                            continue;
+
+                        patchNpc.VirtualMachineAdapter.Scripts.Add(script.DeepCopy());
+                        change = true;
+                    }
+                }
+
+                if (AioPluginUtilities.ShouldForwardAioObjectBounds(
+                    winningMaster.ObjectBounds,
+                    aioNpc.ObjectBounds,
+                    winningOverride.ObjectBounds))
+                {
+                    patchNpc.ObjectBounds = aioNpc.ObjectBounds.DeepCopy();
+                    change = true;
+                }
 
 
                 if (_settings.Value.IgnoreIdenticalToLastOverride && !change)
                 {
-                    state.PatchMod.Npcs.Remove(npc);
+                    state.PatchMod.Npcs.Remove(aioNpc);
                 }
                 else if (change)
                 {
                     updatedCount++;
-                    string displayName = npc.FormKey.ToString();
+                    string displayName = aioNpc.FormKey.ToString();
                     try
                     {
-                        if (npc.Name != null)
-                            displayName = npc.Name.ToString() ?? displayName;
+                        if (aioNpc.Name != null)
+                            displayName = aioNpc.Name.ToString() ?? displayName;
                         else if (winningOverride != null && winningOverride.Name != null)
                             displayName = winningOverride.Name.ToString() ?? displayName;
                     }
                     catch
                     {
-                        displayName = npc.FormKey.ToString();
+                        displayName = aioNpc.FormKey.ToString();
                     }
                     string masterSource = "unknown";
                     try
@@ -315,7 +376,8 @@ namespace AIOverhaulPatcher
                             masterSource = winningMaster.FormKey.ModKey.FileName;
                     }
                     catch { }
-                    var entry = $"{displayName} ({npc.FormKey}) - source: {masterSource}";
+                    var winningAioModName = AioPluginUtilities.GetWinningAioModKey(aioNpc.FormKey, state, aioModKeys)?.FileName ?? "unknown";
+                    var entry = $"{displayName} ({aioNpc.FormKey}) - source: {masterSource} [aio-mod: {winningAioModName}]";
                     updatedNpcs.Add(entry);
                     System.Console.WriteLine("Updated: " + entry);
                 }
@@ -330,6 +392,12 @@ namespace AIOverhaulPatcher
                 foreach (var e in updatedNpcs)
                     System.Console.WriteLine("  " + e);
             }
+
+            if (_settings.Value.QuestAlpcPatch == QuestAlpcPatchMode.Mg01Only)
+                QuestAlpcPatcher.PatchMg01(state, aioModKeys, UsleepOrder, _settings.Value, AIOverhaul);
+            else if (_settings.Value.QuestAlpcPatch == QuestAlpcPatchMode.All)
+                QuestAlpcPatcher.PatchAll(state, aioModKeys, UsleepOrder, _settings.Value, AIOverhaul, aioMods);
+
             if (state.PatchMod.ModKey.Name == AioPatchName)
             {
                 state.PatchMod.ModHeader.Flags = state.PatchMod.ModHeader.Flags | SkyrimModHeader.HeaderFlag.Small;
