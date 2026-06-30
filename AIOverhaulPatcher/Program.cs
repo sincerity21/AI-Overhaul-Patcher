@@ -20,9 +20,6 @@ namespace AIOverhaulPatcher
         const string AioPatchName = "AIOPatch.esp";
         public static Task<int> Main(string[] args)
         {
-            if (args.Length > 0 && string.Equals(args[0], "verify-npcs", StringComparison.OrdinalIgnoreCase))
-                return Task.FromResult(Verify.NpcMergeVerifier.Run());
-
             if (args.Length > 0 && string.Equals(args[0], "verify-quest-alpc", StringComparison.OrdinalIgnoreCase))
                 return Task.FromResult(Verify.QuestAlpcMergeVerifier.Run());
 
