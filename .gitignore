@@ -6,3 +6,5 @@ AIOverhaulPatcher/bin/
 .vscode/tasks.json
 %APPDATA%/*
 AIOverhaulPatcher/Verify/NpcMergeVerifier.cs
+AIOverhaulPatcher/Verify/PackageNpcMergeVerifier.cs
+AIOverhaulPatcher/Verify/QuestAlpcMergeVerifier.cs

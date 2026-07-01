@@ -9,5 +9,7 @@
         public bool MaintainHighestProtectionLevel { get; set; } = true;
         public bool MergeItems { get; set; } = true;
         public QuestAlpcPatchMode QuestAlpcPatch { get; set; } = QuestAlpcPatchMode.Off;
+        public bool LogPackageMerge { get; set; } = true;
+        public bool LogPackageMergeAllNpcs { get; set; } = false;
     }
 }

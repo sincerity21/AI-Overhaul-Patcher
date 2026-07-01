@@ -20,14 +20,6 @@ namespace AIOverhaulPatcher
         const string AioPatchName = "AIOPatch.esp";
         public static Task<int> Main(string[] args)
         {
-            if (args.Length > 0 && string.Equals(args[0], "verify-quest-alpc", StringComparison.OrdinalIgnoreCase))
-                return Task.FromResult(Verify.QuestAlpcMergeVerifier.Run());
-
-            // Diagnostic: log raw args received so we can see how Synthesis forwards them.
-            Console.WriteLine($"Raw args length: {args.Length}");
-            for (int _i = 0; _i < args.Length; _i++)
-                Console.WriteLine($"arg[{_i}]: '{args[_i]}'");
-
             // If Synthesis (or other caller) passes the entire app argument string as a single
             // quoted argument, split it into proper args here so the pipeline receives them.
             if (args.Length == 1)
@@ -171,18 +163,22 @@ namespace AIOverhaulPatcher
                         change = true;
                 }
 
-                foreach (var fac in aioNpc.Factions)
-                    if (!patchNpc.Factions.Select(x => new KeyValuePair<FormKey, int>(x.Faction.FormKey, x.Rank)).Contains(new KeyValuePair<FormKey, int>(fac.Faction.FormKey, fac.Rank)))
-                    {
-                        patchNpc.Factions.Add(fac.DeepCopy());
-                        change = true;
-
-                    }
+                if (AioPluginUtilities.ForwardAioFactionChanges(patchNpc, winningMaster, aioNpc, winningOverride))
+                    change = true;
 
                 var aioPackages = AioPluginUtilities.BuildEffectiveAioPackageOrder(formKey, state, aioModKeys);
-                var mergedPackages = AioPluginUtilities.BuildMergedPackageList(
+                var packageMerge = AioPluginUtilities.BuildMergedPackageList(
+                    state.LinkCache,
                     aioPackages.EffectiveAioOrder,
-                    winningOverride, Masters, overrides);
+                    winningOverride.Packages.Select(x => x.FormKey).ToList(),
+                    Masters.Select(m => m.Packages.Select(x => x.FormKey).ToList()));
+                var mergedPackages = packageMerge.Packages;
+                LogPackageMerge(
+                    aioNpc,
+                    aioPackages,
+                    winningOverride,
+                    mergedPackages,
+                    packageMerge.Events);
                 var packagesReordered = !AioPluginUtilities.PackageListsEqual(patchNpc.Packages, mergedPackages);
                 if (packagesReordered)
                 {
@@ -337,6 +333,10 @@ namespace AIOverhaulPatcher
                     }
                 }
 
+                if (AioPluginUtilities.ForwardAioSpellChanges(
+                    patchNpc, state.LinkCache, winningMaster, aioNpc, winningOverride))
+                    change = true;
+
                 if (AioPluginUtilities.ShouldForwardAioObjectBounds(
                     winningMaster.ObjectBounds,
                     aioNpc.ObjectBounds,
@@ -399,6 +399,35 @@ namespace AIOverhaulPatcher
             {
                 state.PatchMod.ModHeader.Flags = state.PatchMod.ModHeader.Flags | SkyrimModHeader.HeaderFlag.Small;
             }
+        }
+
+        private static void LogPackageMerge(
+            INpcGetter aioNpc,
+            AioPackageMergeResult aioPackages,
+            INpcGetter winningOverride,
+            IReadOnlyList<FormKey> mergedPackages,
+            IReadOnlyList<string> events)
+        {
+            if (!_settings.Value.LogPackageMerge) return;
+
+            bool hasUssepLayer = aioPackages.LayersByModFileName.ContainsKey(AioPluginUtilities.UssepPatchFileName);
+            if (!_settings.Value.LogPackageMergeAllNpcs && !hasUssepLayer && events.Count == 0) return;
+
+            string npcLabel = aioNpc.FormKey.ToString();
+            try
+            {
+                if (aioNpc.Name != null)
+                    npcLabel = $"{aioNpc.Name} ({aioNpc.FormKey})";
+            }
+            catch { }
+
+            var winnerPackages = winningOverride.Packages.Select(x => x.FormKey).ToList();
+            Console.WriteLine($"Package merge {npcLabel}:");
+            Console.WriteLine($"  winner=[{AioPluginUtilities.FormatPackageList(winnerPackages)}]");
+            Console.WriteLine($"  aio=[{AioPluginUtilities.FormatPackageList(aioPackages.EffectiveAioOrder)}]");
+            Console.WriteLine($"  merged=[{AioPluginUtilities.FormatPackageList(mergedPackages)}]");
+            foreach (var evt in events)
+                Console.WriteLine($"  {evt}");
         }
 
         private static string[] SplitArgs(string commandLine)

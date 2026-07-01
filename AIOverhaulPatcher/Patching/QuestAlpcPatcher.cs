@@ -143,13 +143,6 @@ namespace AIOverhaulPatcher.Patching
                 return (false, 0);
             }
 
-            var postUssepOverrides = state.LoadOrder.PriorityOrder.Reverse()
-                .Skip(ussepOrder + 1)
-                .Select(x => x.Mod).NotNull()
-                .SelectMany(x => x.Quests)
-                .Where(x => x.FormKey == questFormKey)
-                .ToList();
-
             questLabel ??= FormatQuestLabel(winningOverride);
 
             Quest? patchQuest = null;
@@ -177,15 +170,13 @@ namespace AIOverhaulPatcher.Patching
                 var masterPackageLists = questMasters
                     .Select(m => AioQuestAlpcUtilities.GetReferenceAliasPackages(m, aliasId))
                     .ToList();
-                var postUssepLists = postUssepOverrides
-                    .Select(o => AioQuestAlpcUtilities.GetReferenceAliasPackages(o, aliasId))
-                    .ToList();
 
-                var mergedPackages = AioPluginUtilities.BuildMergedPackageList(
+                var packageMerge = AioPluginUtilities.BuildMergedPackageList(
+                    state.LinkCache,
                     aioPackageOrder.EffectiveAioOrder,
                     winnerPackages,
-                    masterPackageLists,
-                    postUssepLists);
+                    masterPackageLists);
+                var mergedPackages = packageMerge.Packages;
 
                 if (AioPluginUtilities.PackageListsEqual(winnerPackages, mergedPackages))
                     continue;
